@@ -48,7 +48,7 @@ f_max = audio_params["f_max"]
 chunk_len = chunk_dur * sr
 
 def preprocess(wav_path, sr):
-    _X, sr = librosa.load(wav_path, sr)
+    _X, sr = librosa.load(wav_path, sr, mono=False)
     X = quantile_normalize(_X)
     X = padding(X, chunk_len)
     return _X, X, sr
@@ -60,13 +60,16 @@ def padding(audio, chunk_len):
         audio = np.concatenate([audio, pad])
     return audio.reshape(-1, chunk_len)
 
-def spectogram(audio):
-    spec = melspectrogram(audio, sr=audio_params['sr'], center=True, 
-          n_mels=audio_params['n_mel'], n_fft=audio_params['n_fft'], 
-          win_length=audio_params['win_length'], hop_length=audio_params['hop_length'], 
-          fmin=audio_params['f_min'], 
-          fmax=audio_params['f_max'])
-    spec = np.log(spec)
+def spectogram(audio_chunks):
+    for audio in audio_chunks:
+        spec = melspectrogram(audio, sr=audio_params['sr'], center=True, 
+            n_mels=audio_params['n_mel'], n_fft=audio_params['n_fft'], 
+            win_length=audio_params['win_length'], hop_length=audio_params['hop_length'], 
+            fmin=audio_params['f_min'], 
+            fmax=audio_params['f_max'])
+        spec = np.log(spec)
+    spec = np.hstack(spec)
+    return spec
 
 def quantile_normalize(audio, quantile=0.999):
     return audio / np.quantile(abs(audio), quantile)
