@@ -1,10 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import librosa
 
 class FrontEnd:
 
-    def __init__(self, samp_rate=16000, frame_duration=0.025, frame_shift=0.010, preemphasis=0.97,
-                 num_mel=40, lo_freq=0, hi_freq=None, mean_norm_feat=True, mean_norm_wav=True, compute_stats=False):
+    def __init__(self, samp_rate=16000, frame_duration=0.025, frame_shift=0.01, preemphasis=0.97,
+                 num_mel=120, lo_freq=0, hi_freq=None, mean_norm_feat=True, mean_norm_wav=True, compute_stats=False):
         self.samp_rate = samp_rate
         self.win_size = int(np.floor(frame_duration * samp_rate))
         self.win_shift = int(np.floor(frame_shift * samp_rate))
@@ -29,7 +30,6 @@ class FrontEnd:
         self.global_var = np.zeros([num_mel])
         self.global_frames = 0
         self.compute_global_stats = compute_stats
-
     # linear-scale frequency (Hz) to mel-scale frequency
     def lin2mel(self,freq):
         return 2595*np.log10(1+freq/700)
@@ -56,10 +56,10 @@ class FrontEnd:
             left_bin = int(mel_bins[i])
             center_bin = int(mel_bins[i+1])
             right_bin = int(mel_bins[i+2])
-            up_slope = 1/(center_bin-left_bin)
+            up_slope = 1/(center_bin-left_bin) if (center_bin!=left_bin) else 0
             for j in range(left_bin,center_bin):
                 self.mel_filterbank[i,j] = (j - left_bin)*up_slope
-            down_slope = -1/(right_bin-center_bin)
+            down_slope = -1/(right_bin-center_bin) if (right_bin!=center_bin) else 0
             for j in range(center_bin,right_bin):
                 self.mel_filterbank[i,j] = (j-right_bin)*down_slope
 
@@ -78,7 +78,7 @@ class FrontEnd:
         # apply pre-emphasis filtering on waveform
         # pre-emphasis is explained at https://haythamfayek.com/2016/04/21/speech-processing-for-machine-learning.html
         # x(t) - alpha * x(t - 1)
-        preemph_wav = wav[:] - np.append([0], self.preemphasis * wav[:-1])
+        preemph_wav = wav[:] - np.append([0], self.preemphasis * wav[:-1].flatten())
         return preemph_wav
 
     def wav_to_frames(self, wav):
@@ -96,8 +96,8 @@ class FrontEnd:
     def frames_to_magspec(self, frames):
         # compute the fft
         # compute magnitude
-        magspec = np.stack([np.absolute(np.fft.rfft(frames[:,col])) for col in range(frames.shape[1])], axis=1)
-        return magspec
+        magspec = np.concatenate([np.absolute(librosa.core.stft(np.array(frames[:,col]),n_fft=self.fft_size)) for col in range(frames.shape[1])], axis=1)
+        return magspec.T
 
     # for each frame(column of 2D array 'magspec'), compute the log mel spectrum, by applying the mel filterbank to the magnitude spectrum
     def magspec_to_fbank(self, magspec):
